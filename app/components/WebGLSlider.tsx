@@ -99,7 +99,7 @@ void main() {
 }`;
 
 const easeInOutCubic = (t: number) =>
-    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 1;
 
 const WebGLSlider = ({ images, active, previous, direction, duration, label }: WebGLSliderProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
