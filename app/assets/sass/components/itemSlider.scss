@@ -51,18 +51,8 @@ $duration: 0.9s;
         height: 500px;
         position: relative;
         overflow: hidden;
-        .image-wrapper{
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            @include layer-states(reveal-from-bottom, push-out, reveal-from-top, push-out);
-            // The entering image is drawn above the leaving one
-            &.is-active { z-index: 2; }
-            &.is-leaving { z-index: 1; }
-        }
-        img{
+        .webgl-slider{
+            display: block;
             width: 100%;
             height: 100%;
         }
@@ -101,20 +91,6 @@ $duration: 0.9s;
 @keyframes slide-up-out { from { transform: translateY(0); } to { transform: translateY(-100%); } }
 @keyframes slide-down-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 @keyframes slide-down-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
-
-// Images
-@keyframes reveal-from-bottom {
-    from { clip-path: inset(100% 0 0 0); transform: scale(1.15); }
-    to { clip-path: inset(0 0 0 0); transform: scale(1); }
-}
-@keyframes reveal-from-top {
-    from { clip-path: inset(0 0 100% 0); transform: scale(1.15); }
-    to { clip-path: inset(0 0 0 0); transform: scale(1); }
-}
-@keyframes push-out {
-    from { transform: scale(1); filter: brightness(1); }
-    to { transform: scale(0.9); filter: brightness(0.4); }
-}
 
 // Descriptions
 @keyframes fade-up-in { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }

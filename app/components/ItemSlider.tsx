@@ -1,4 +1,4 @@
-import Image from "next/image";
+import WebGLSlider from "./WebGLSlider";
 
 export type Slide = {
     title: string;
@@ -11,9 +11,11 @@ type ItemSliderProps = {
     slides: Slide[];
     active: number;
     previous: number | null;
+    direction: "next" | "prev";
+    duration: number; // ms, WebGL mask transition
 };
 
-const ItemSlider = ({ slides, active, previous }: ItemSliderProps) => {
+const ItemSlider = ({ slides, active, previous, direction, duration }: ItemSliderProps) => {
     // is-active: slide entering / shown, is-leaving: slide animating out, otherwise hidden
     const state = (i: number) =>
         i === active ? "is-active" : i === previous ? "is-leaving" : "";
@@ -27,11 +29,14 @@ const ItemSlider = ({ slides, active, previous }: ItemSliderProps) => {
                     ))}
                 </div>
                 <div className="slider-item-image">
-                    {slides.map((slide, i) => (
-                        <div key={i} className={`image-wrapper image-${i + 1} ${state(i)}`} aria-hidden={i !== active}>
-                            <Image src={slide.image} alt={slide.title} width={700} height={500} priority={i === 0} />
-                        </div>
-                    ))}
+                    <WebGLSlider
+                        images={slides.map((slide) => slide.image)}
+                        active={active}
+                        previous={previous}
+                        direction={direction}
+                        duration={duration}
+                        label={slides[active].title}
+                    />
                 </div>
                 <div className="slider-item-content">
                     <div className="content-titles">
