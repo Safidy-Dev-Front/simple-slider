@@ -1,0 +1,129 @@
+$ease: cubic-bezier(0.77, 0, 0.175, 1);
+$duration: 0.9s;
+
+// Stack every layer on the same grid cell: the container takes the size of the tallest one
+@mixin stack {
+    display: grid;
+    > * {
+        grid-area: 1 / 1;
+    }
+}
+
+// Layers that are neither active nor leaving stay hidden
+@mixin layer-states($in-next, $out-next, $in-prev, $out-prev, $delay: 0s) {
+    visibility: hidden;
+    &.is-active,
+    &.is-leaving {
+        visibility: visible;
+        animation-duration: $duration;
+        animation-timing-function: $ease;
+        animation-fill-mode: both;
+    }
+    &.is-active { animation-delay: $delay; }
+
+    .dir-next & {
+        &.is-active { animation-name: $in-next; }
+        &.is-leaving { animation-name: $out-next; }
+    }
+    .dir-prev & {
+        &.is-active { animation-name: $in-prev; }
+        &.is-leaving { animation-name: $out-prev; }
+    }
+}
+
+.slider-item{
+    max-width: 700px;
+    .slider-item-header{
+        @include stack;
+        overflow: hidden;
+        .title-wrapper{
+            @include layer-states(slide-up-in, slide-up-out, slide-down-in, slide-down-out);
+        }
+        h2{
+            font-size: 64px;
+            font-weight: 800;
+            margin: 0;
+            text-transform: uppercase;
+        }
+    }
+    .slider-item-image{
+        width: 100%;
+        height: 500px;
+        position: relative;
+        overflow: hidden;
+        .image-wrapper{
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            @include layer-states(reveal-from-bottom, push-out, reveal-from-top, push-out);
+            // The entering image is drawn above the leaving one
+            &.is-active { z-index: 2; }
+            &.is-leaving { z-index: 1; }
+        }
+        img{
+            width: 100%;
+            height: 100%;
+        }
+    }
+    .slider-item-content{
+        padding-top: 20px;
+    }
+    .slider-item-content{
+        .content-titles,
+        .content-descs{
+            @include stack;
+            overflow: hidden;
+
+        }
+        .content-title{
+            @include layer-states(slide-up-in, slide-up-out, slide-down-in, slide-down-out, 0.1s);
+            margin-bottom: 8px;
+
+        }
+        .content-desc{
+            @include layer-states(fade-up-in, fade-out, fade-down-in, fade-out, 0.2s);
+        }
+        h4{
+            font-size: 24px;
+            font-weight: 400;
+        }
+        p{
+            font-size: 16px;
+            font-weight: 300;
+        }
+    }
+}
+
+// Titles (masked by overflow: hidden)
+@keyframes slide-up-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes slide-up-out { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+@keyframes slide-down-in { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+@keyframes slide-down-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+// Images
+@keyframes reveal-from-bottom {
+    from { clip-path: inset(100% 0 0 0); transform: scale(1.15); }
+    to { clip-path: inset(0 0 0 0); transform: scale(1); }
+}
+@keyframes reveal-from-top {
+    from { clip-path: inset(0 0 100% 0); transform: scale(1.15); }
+    to { clip-path: inset(0 0 0 0); transform: scale(1); }
+}
+@keyframes push-out {
+    from { transform: scale(1); filter: brightness(1); }
+    to { transform: scale(0.9); filter: brightness(0.4); }
+}
+
+// Descriptions
+@keyframes fade-up-in { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-down-in { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .slider-item * {
+        animation-duration: 0.01s !important;
+        animation-delay: 0s !important;
+    }
+}

@@ -1,0 +1,40 @@
+.slider-section{
+    width: 100%;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+   .slider-container{
+        .slider-wrapper{
+            width: fit-content;
+            margin: 0 auto;
+        }
+   }
+   .slider-nav{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 24px;
+        button{
+            width: 48px;
+            height: 48px;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            background: transparent;
+            color: inherit;
+            font-size: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+            &:hover{
+                background-color: #111;
+                color: #fff;
+            }
+        }
+        .slider-counter{
+            font-variant-numeric: tabular-nums;
+        }
+   }
+}

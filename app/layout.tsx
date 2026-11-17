@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import { Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
+import './assets/sass/main.scss';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const rethinkSans = localFont({
+  src: [
+    {
+      path: "../public/fonts/RethinkSans-VariableFont_wght.woff2",
+      weight: "400 800",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/RethinkSans-Italic-VariableFont_wght.woff2",
+      weight: "400 800",
+      style: "italic",
+    },
+  ],
+  variable: "--font-rethink-sans",
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -21,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${rethinkSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

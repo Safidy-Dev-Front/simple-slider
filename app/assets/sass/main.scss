@@ -1,0 +1,5 @@
+@forward './base/index.scss';
+@forward './components/index.scss';
+body {
+    font-family: var(--font-rethink-sans), system-ui, sans-serif;
+}
