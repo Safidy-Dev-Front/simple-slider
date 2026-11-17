@@ -11,21 +11,21 @@ const SLIDES: Slide[] = [
         image: "/pexels-kandrin-19008584.jpg",
         contentTitle: "Item Content 1",
         description:
-            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit quam tempore placeat mollitia in distinctio ullam, ratione fuga, fugiat impedit.",
+            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit quam tempore ",
     },
     {
         title: "Item Title 2",
         image: "/pexels-royce-ukpabia-427074950-17014536.jpg",
         contentTitle: "Item Content 2",
         description:
-            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit quam tempore placeat mollitia in distinctio ullam, ratione fuga, fugiat impedit.",
+            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit quam tempore .",
     },
     {
         title: "Item Title 3",
         image: "/pexels-theresaude-30907864.jpg",
         contentTitle: "Item Content 3",
         description:
-            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit quam tempore placeat mollitia in distinctio ullam, ratione fuga, fugiat impedit.",
+            "Lorem ipsum dolor sit amet consectetur adipisicing elit. Esse deserunt doloribus possimus neque corporis, sint labore commodi autem odit .",
     },
 ];
 

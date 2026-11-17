@@ -36,6 +36,7 @@ $duration: 0.9s;
     .slider-item-header{
         @include stack;
         overflow: hidden;
+        margin-bottom: 16px;
         .title-wrapper{
             @include layer-states(slide-up-in, slide-up-out, slide-down-in, slide-down-out);
         }
@@ -76,11 +77,11 @@ $duration: 0.9s;
             @include layer-states(fade-up-in, fade-out, fade-down-in, fade-out, 0.2s);
         }
         h4{
-            font-size: 24px;
-            font-weight: 400;
+            font-size: 32px;
+            font-weight: 500;
         }
         p{
-            font-size: 16px;
+            font-size: 24px;
             font-weight: 300;
         }
     }
