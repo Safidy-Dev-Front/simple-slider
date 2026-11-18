@@ -31,7 +31,7 @@ const ItemSlider = ({ slides, active, previous, direction, duration }: ItemSlide
                 <div className="slider-item-header">
                     {slides.map((slide, i) => (
                         <div key={i} className={`title-wrapper title-${i + 1} ${state(i)}`} aria-hidden={i !== active}>
-                            <GLText as="h2" state={glState(i)} direction={direction} duration={TEXT_MS}>
+                            <GLText as="h2" variant="blob" state={glState(i)} direction={direction} duration={duration}>
                                 {slide.title}
                             </GLText>
                         </div>

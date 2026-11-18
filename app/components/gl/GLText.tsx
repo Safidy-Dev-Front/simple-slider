@@ -5,11 +5,13 @@ import * as THREE from "three";
 import { useGLStage } from "./GLStageProvider";
 import { prefersReducedMotion, type GLItem } from "./Stage";
 import { drawText, fontOf } from "./textTexture";
+import { VALUE_NOISE } from "./glsl";
 
 export type GLTextState = "in" | "out" | "hidden";
 type Direction = "next" | "prev";
 
 type Variant = {
+    blob?: boolean;  // liquid mask transition, same as the image slider (the other fields are ignored)
     travel: number;  // vertical travel, in element heights ("mask") or CSS px ("fade")
     fade: boolean;   // opacity follows the motion
     stagger: number; // 0..1, part of the timeline used to delay columns from left to right (wave)
@@ -17,6 +19,8 @@ type Variant = {
 };
 
 const VARIANTS = {
+    // Liquid mask, same as the image slider: the leaving text disappears exactly where the entering one appears
+    blob: { blob: true, travel: 0, fade: false, stagger: 0, smear: 0 },
     // Slides inside its own box (the quad clips it, like overflow: hidden): titles
     mask: { travel: 1.4, fade: false, stagger: 0.35, smear: 0.25 },
     // Short slide + fade (paragraphs)
@@ -73,6 +77,69 @@ void main() {
     #include <colorspace_fragment>
 }`;
 
+// Same mask as the image slider (WebGLSlider), in px so a short title gets the same edge as the image.
+// "in" draws the text inside the blob, "out" outside: two stacked titles swap exactly like two images.
+const FRAGMENT_BLOB = /* glsl */ `
+varying vec2 vUv;
+uniform sampler2D uMap;
+uniform vec2 uRes;       // quad size (CSS px)
+uniform float uProgress; // 0 -> 1, linear time
+uniform float uTime;
+uniform float uMode;     // 1 = in, -1 = out
+uniform float uDir;      // 1 = next (blob grows from the bottom), -1 = prev (from the top)
+
+${VALUE_NOISE}
+
+const float REF = 500.0; // px: noise / edge scale of the image slider
+
+float ease(float t) { // same easing as the image (easeInOutCubic)
+    return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) * 0.5;
+}
+
+vec4 tap(vec2 uv) {
+    float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    return texture2D(uMap, uv) * inside;
+}
+
+void main() {
+    float p = ease(uProgress);
+    vec2 px = vUv * uRes;
+    vec2 origin = vec2(0.5, uDir > 0.0 ? -0.15 : 1.15) * uRes;
+    vec2 q = (px - origin) / REF;
+
+    vec2 nUv = px / REF;
+    // Value noise is 0..1: remapped to -1..1 so the blob keeps the same amplitude as the image
+    float n = (noise(nUv * 2.2 + vec2(uTime * 0.25, -uTime * 0.35)) * 2.0 - 1.0) * 0.6
+            + (noise(nUv * 5.0 - vec2(uTime * 0.4, uTime * 0.2)) * 2.0 - 1.0) * 0.25;
+    float d = length(q) + n * 0.22;
+
+    float far = length(max(origin, uRes - origin)) / REF; // farthest corner of the quad
+    float r = mix(-0.35, far + 0.4, p);
+    float mask = 1.0 - smoothstep(r - 0.006, r + 0.006, d);
+
+    // Distortion band along the edge of the blob (px -> uv)
+    float edge = 1.0 - smoothstep(0.0, 0.18, abs(d - r));
+    vec2 toward = normalize(q + 1e-4) / uRes;
+
+    vec2 uv;
+    float alpha;
+    if (uMode > 0.0) {
+        // Entering: starts slightly zoomed in, pulled by the edge, visible inside the blob
+        uv = (vUv - 0.5) * (1.0 - 0.06 * (1.0 - p)) + 0.5;
+        uv -= toward * edge * 20.0;
+        alpha = mask;
+    } else {
+        // Leaving: slowly zooms, pushed by the edge, visible outside the blob
+        uv = (vUv - 0.5) * (1.0 - 0.04 * p) + 0.5;
+        uv += toward * edge * 10.0;
+        alpha = 1.0 - mask;
+    }
+
+    vec4 c = tap(uv);
+    gl_FragColor = vec4(c.rgb, c.a * alpha);
+    #include <colorspace_fragment>
+}`;
+
 type GLTextProps = {
     as?: "h1" | "h2" | "h3" | "h4" | "p" | "span";
     children: string;
@@ -80,7 +147,7 @@ type GLTextProps = {
     state: GLTextState;
     direction: Direction;
     variant?: keyof typeof VARIANTS;
-    delay?: number;    // ms, entering only
+    delay?: number;    // ms, entering only (both ways for "blob", so in / out stay in sync)
     duration?: number; // ms
 };
 
@@ -115,11 +182,13 @@ export default function GLText({ as = "p", children, className, state, direction
             uFade: { value: config.fade ? 1 : 0 },
             uStagger: { value: config.stagger },
             uSmear: { value: 0 },
+            uRes: { value: new THREE.Vector2(1, 1) },
+            uTime: { value: 0 },
         };
         const geometry = new THREE.PlaneGeometry(1, 1);
         const material = new THREE.ShaderMaterial({
             vertexShader: VERTEX,
-            fragmentShader: FRAGMENT,
+            fragmentShader: config.blob ? FRAGMENT_BLOB : FRAGMENT,
             uniforms,
             transparent: true,
             depthTest: false,
@@ -131,7 +200,8 @@ export default function GLText({ as = "p", children, className, state, direction
 
         // Room for glyphs taller than the line box (line-height: 1) and for the "fade" travel
         const fontSize = parseFloat(getComputedStyle(el).fontSize);
-        const bleed = { x: fontSize * 0.1, y: fontSize * 0.3 + (config.fade ? config.travel : 0) };
+        // (blob: the entering text is zoomed, give it room on the sides)
+        const bleed = { x: fontSize * (config.blob ? 0.5 : 0.1), y: fontSize * 0.3 + (config.fade ? config.travel : 0) };
 
         const anim = { running: false, start: 0, duration, mode: 1 };
         let drawn = false;
@@ -154,6 +224,7 @@ export default function GLText({ as = "p", children, className, state, direction
             bleed,
             resize(width, height, pixelRatio) {
                 size = { width, height, pixelRatio };
+                uniforms.uRes.value.set(width, height);
                 const travel = config.fade ? config.travel : config.travel * (height - bleed.y * 2);
                 uniforms.uTravel.value = travel / height;
                 uniforms.uSmear.value = (config.smear * (height - bleed.y * 2)) / height;
@@ -163,6 +234,7 @@ export default function GLText({ as = "p", children, className, state, direction
                 if (!anim.running) return false;
                 const t = Math.min(Math.max((now - anim.start) / anim.duration, 0), 1);
                 uniforms.uProgress.value = t;
+                uniforms.uTime.value = (now / 1000) % 1000; // same clock as the image: same noise
                 if (t < 1) return true;
                 anim.running = false;
                 if (anim.mode < 0) mesh.visible = false;
@@ -193,7 +265,7 @@ export default function GLText({ as = "p", children, className, state, direction
                 Object.assign(anim, {
                     running: true,
                     mode,
-                    start: performance.now() + (mode > 0 ? delayMs : 0),
+                    start: performance.now() + (mode > 0 || config.blob ? delayMs : 0),
                     duration: prefersReducedMotion() ? 1 : duration,
                 });
                 uniforms.uMode.value = mode;
