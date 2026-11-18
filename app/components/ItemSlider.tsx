@@ -1,4 +1,5 @@
 import WebGLSlider from "./WebGLSlider";
+import GLText, { type GLTextState } from "./gl/GLText";
 
 export type Slide = {
     title: string;
@@ -15,16 +16,24 @@ type ItemSliderProps = {
     duration: number; // ms, WebGL mask transition
 };
 
+// Text animation length; entering delays are staggered per block (title, content title, description)
+const TEXT_MS = 900;
+
 const ItemSlider = ({ slides, active, previous, direction, duration }: ItemSliderProps) => {
     // is-active: slide entering / shown, is-leaving: slide animating out, otherwise hidden
+    // (the classes drive the CSS fallback when WebGL is not available)
     const state = (i: number) =>
         i === active ? "is-active" : i === previous ? "is-leaving" : "";
+    const glState = (i: number): GLTextState =>
+        i === active ? "in" : i === previous ? "out" : "hidden";
 
     return <div className="slider-item">
                 <div className="slider-item-header">
                     {slides.map((slide, i) => (
                         <div key={i} className={`title-wrapper title-${i + 1} ${state(i)}`} aria-hidden={i !== active}>
-                            <h2>{slide.title}</h2>
+                            <GLText as="h2" state={glState(i)} direction={direction} duration={TEXT_MS}>
+                                {slide.title}
+                            </GLText>
                         </div>
                     ))}
                 </div>
@@ -42,14 +51,18 @@ const ItemSlider = ({ slides, active, previous, direction, duration }: ItemSlide
                     <div className="content-titles">
                         {slides.map((slide, i) => (
                             <div key={i} className={`content-title content-title-${i + 1} ${state(i)}`} aria-hidden={i !== active}>
-                                <h4>{slide.contentTitle}</h4>
+                                <GLText as="h4" state={glState(i)} direction={direction} delay={100} duration={TEXT_MS}>
+                                    {slide.contentTitle}
+                                </GLText>
                             </div>
                         ))}
                     </div>
                     <div className="content-descs">
                         {slides.map((slide, i) => (
                             <div key={i} className={`content-desc content-desc-${i + 1} ${state(i)}`} aria-hidden={i !== active}>
-                                <p>{slide.description}</p>
+                                <GLText as="p" variant="fade" state={glState(i)} direction={direction} delay={200} duration={TEXT_MS}>
+                                    {slide.description}
+                                </GLText>
                             </div>
                         ))}
                     </div>

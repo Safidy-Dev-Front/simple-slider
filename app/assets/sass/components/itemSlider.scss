@@ -29,6 +29,11 @@ $duration: 0.9s;
         &.is-active { animation-name: $in-prev; }
         &.is-leaving { animation-name: $out-prev; }
     }
+
+    // The text is animated by WebGL: the CSS animation would move the box WebGL follows
+    &:has(.gl-text) {
+        animation: none !important;
+    }
 }
 
 .slider-item{

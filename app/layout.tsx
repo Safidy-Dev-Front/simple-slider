@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import './assets/sass/main.scss';
+import GLStageProvider from "./components/gl/GLStageProvider";
 
 const rethinkSans = localFont({
   src: [
@@ -36,7 +37,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${rethinkSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <GLStageProvider>{children}</GLStageProvider>
+      </body>
     </html>
   );
 }

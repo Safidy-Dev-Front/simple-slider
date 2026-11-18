@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { useGLStage } from "./gl/GLStageProvider";
+import { prefersReducedMotion, type GLItem } from "./gl/Stage";
 
 type Direction = "next" | "prev";
 
@@ -18,7 +20,7 @@ const VERTEX = /* glsl */ `
 varying vec2 vUv;
 void main() {
     vUv = uv;
-    gl_Position = vec4(position.xy, 0.0, 1.0);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
 const FRAGMENT = /* glsl */ `
@@ -26,7 +28,7 @@ varying vec2 vUv;
 
 uniform sampler2D uFrom;
 uniform sampler2D uTo;
-uniform vec2 uRes;       // canvas size (px)
+uniform vec2 uRes;       // element size (px)
 uniform vec2 uFromSize;  // image sizes (px), for "object-fit: cover"
 uniform vec2 uToSize;
 uniform float uProgress; // 0 -> 1
@@ -101,24 +103,23 @@ void main() {
 const easeInOutCubic = (t: number) =>
     t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-const WebGLSlider = ({ images, active, previous, direction, duration, label }: WebGLSliderProps) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    // Imperative handle to the scene, created once on mount
-    const sceneRef = useRef<{ transition: (from: number, to: number, dir: Direction) => void; show: (i: number) => void } | null>(null);
+type Controller = { transition: (from: number, to: number, dir: Direction) => void; show: (i: number) => void };
 
-    // Stable key so a new array with the same images does not rebuild the scene
+/** Image slider drawn by the global WebGL canvas, following the box of its placeholder div */
+const WebGLSlider = ({ images, active, previous, direction, duration, label }: WebGLSliderProps) => {
+    const stage = useGLStage();
+    const elRef = useRef<HTMLDivElement>(null);
+    const ctrlRef = useRef<Controller | null>(null);
+    const activeRef = useRef(active);
+    useEffect(() => {
+        activeRef.current = active; // read when the item is (re)built
+    });
+
+    // Stable key so a new array with the same images does not rebuild the item
     const imagesKey = images.join("|");
 
     useEffect(() => {
         const sources = imagesKey.split("|");
-        const canvas = canvasRef.current!;
-
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: "high-performance" });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-        // Fullscreen quad: the vertex shader ignores the camera
-        const scene = new THREE.Scene();
-        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
         const uniforms = {
             uFrom: { value: null as THREE.Texture | null },
             uTo: { value: null as THREE.Texture | null },
@@ -129,20 +130,15 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
             uTime: { value: 0 },
             uDir: { value: 1 },
         };
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        const material = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: FRAGMENT, uniforms });
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: FRAGMENT, uniforms, depthTest: false, depthWrite: false });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.frustumCulled = false;
-        scene.add(mesh);
+        mesh.renderOrder = 0; // below texts
+        mesh.visible = false;
 
-        // Current state of the scene
-        const state = { from: 0, to: 0, dir: 1, start: 0 };
-        const timer = new THREE.Timer();
-        let raf = 0;
+        const state = { from: activeRef.current, to: activeRef.current, dir: 1, start: 0, running: false, duration };
 
-        // Textures (loaded asynchronously). The source images are much larger than the canvas,
-        // so they need mipmaps: without them the downscaled image aliases and shimmers while it
-        // zooms / gets distorted during the transition.
+        // The source images are much larger than the element: mipmaps avoid aliasing while they zoom / warp
         const textures: (THREE.Texture | null)[] = sources.map(() => null);
         const loader = new THREE.TextureLoader();
         let disposed = false;
@@ -153,10 +149,10 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
                 texture.generateMipmaps = true;
                 texture.minFilter = THREE.LinearMipmapLinearFilter;
                 texture.magFilter = THREE.LinearFilter;
-                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                texture.anisotropy = stage.maxAnisotropy;
                 textures[i] = texture;
-                renderer.initTexture(texture); // upload to the GPU now, not during the first transition
-                render();
+                stage.renderer?.initTexture(texture); // upload to the GPU now, not during the first transition
+                stage.invalidate();
             });
         });
 
@@ -165,76 +161,72 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
             target.set(img.width, img.height);
         };
 
-        function render() {
-            const from = textures[state.from];
-            const to = textures[state.to];
-            if (!from || !to) return;
-            uniforms.uFrom.value = from;
-            uniforms.uTo.value = to;
-            setSize(uniforms.uFromSize.value, from);
-            setSize(uniforms.uToSize.value, to);
-            uniforms.uDir.value = state.dir;
-            timer.update();
-            uniforms.uTime.value = timer.getElapsed();
-            renderer.render(scene, camera);
-        }
+        const item: GLItem = {
+            el: elRef.current!,
+            object: mesh,
+            resize(width, height) {
+                uniforms.uRes.value.set(width, height);
+            },
+            update(now) {
+                const from = textures[state.from];
+                const to = textures[state.to];
+                mesh.visible = !!(from && to);
+                if (state.running) {
+                    const t = Math.min(Math.max((now - state.start) / state.duration, 0), 1);
+                    uniforms.uProgress.value = easeInOutCubic(t);
+                    state.running = t < 1;
+                }
+                if (from && to) {
+                    uniforms.uFrom.value = from;
+                    uniforms.uTo.value = to;
+                    setSize(uniforms.uFromSize.value, from);
+                    setSize(uniforms.uToSize.value, to);
+                }
+                uniforms.uDir.value = state.dir;
+                uniforms.uTime.value = (now / 1000) % 1000;
+                return state.running;
+            },
+        };
+        const remove = stage.add(item);
 
-        // Only renders during a transition: no GPU work while idle
-        function tick(now: number) {
-            // rAF timestamps can be slightly earlier than performance.now(): clamp to avoid a negative progress
-            const t = Math.min(Math.max((now - state.start) / duration, 0), 1);
-            uniforms.uProgress.value = easeInOutCubic(t);
-            render();
-            if (t < 1) raf = requestAnimationFrame(tick);
-        }
-
-        sceneRef.current = {
+        ctrlRef.current = {
             show(i) {
-                cancelAnimationFrame(raf);
-                Object.assign(state, { from: i, to: i });
+                Object.assign(state, { from: i, to: i, running: false });
                 uniforms.uProgress.value = 1;
-                render();
+                stage.invalidate();
             },
             transition(from, to, dir) {
-                cancelAnimationFrame(raf);
-                Object.assign(state, { from, to, dir: dir === "next" ? 1 : -1, start: performance.now() });
+                Object.assign(state, {
+                    from,
+                    to,
+                    dir: dir === "next" ? 1 : -1,
+                    start: performance.now(),
+                    running: true,
+                    duration: prefersReducedMotion() ? 1 : duration,
+                });
                 uniforms.uProgress.value = 0;
-                raf = requestAnimationFrame(tick);
+                stage.invalidate();
             },
         };
-
-        // Keep the canvas resolution in sync with its CSS size
-        const resize = () => {
-            renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-            renderer.getDrawingBufferSize(uniforms.uRes.value);
-            render();
-        };
-        const observer = new ResizeObserver(resize);
-        observer.observe(canvas);
-        resize();
 
         return () => {
             disposed = true;
-            cancelAnimationFrame(raf);
-            observer.disconnect();
-            sceneRef.current = null;
+            remove();
+            ctrlRef.current = null;
             textures.forEach((t) => t?.dispose());
             geometry.dispose();
             material.dispose();
-            timer.dispose();
-            renderer.dispose();
         };
-        // The scene is built once per image list; slide changes go through sceneRef
-    }, [imagesKey, duration]);
+    }, [stage, imagesKey, duration]);
 
     useEffect(() => {
-        const scene = sceneRef.current;
-        if (!scene) return;
-        if (previous === null || previous === active) scene.show(active);
-        else scene.transition(previous, active, direction);
+        const ctrl = ctrlRef.current;
+        if (!ctrl) return;
+        if (previous === null || previous === active) ctrl.show(active);
+        else ctrl.transition(previous, active, direction);
     }, [active, previous, direction]);
 
-    return <canvas ref={canvasRef} className="webgl-slider" role="img" aria-label={label} />;
+    return <div ref={elRef} className="webgl-slider" role="img" aria-label={label} />;
 };
 
 export default WebGLSlider;
