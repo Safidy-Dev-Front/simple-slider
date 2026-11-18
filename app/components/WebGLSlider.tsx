@@ -99,7 +99,7 @@ void main() {
 }`;
 
 const easeInOutCubic = (t: number) =>
-    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 1;
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 const WebGLSlider = ({ images, active, previous, direction, duration, label }: WebGLSliderProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -140,7 +140,9 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
         const timer = new THREE.Timer();
         let raf = 0;
 
-        // Textures (loaded asynchronously, no mipmaps: the quad is always rendered ~1:1)
+        // Textures (loaded asynchronously). The source images are much larger than the canvas,
+        // so they need mipmaps: without them the downscaled image aliases and shimmers while it
+        // zooms / gets distorted during the transition.
         const textures: (THREE.Texture | null)[] = sources.map(() => null);
         const loader = new THREE.TextureLoader();
         let disposed = false;
@@ -148,8 +150,10 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
             loader.load(src, (texture) => {
                 if (disposed) return texture.dispose();
                 texture.colorSpace = THREE.SRGBColorSpace;
-                texture.generateMipmaps = false;
-                texture.minFilter = THREE.LinearFilter;
+                texture.generateMipmaps = true;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                 textures[i] = texture;
                 renderer.initTexture(texture); // upload to the GPU now, not during the first transition
                 render();
@@ -177,7 +181,8 @@ const WebGLSlider = ({ images, active, previous, direction, duration, label }: W
 
         // Only renders during a transition: no GPU work while idle
         function tick(now: number) {
-            const t = Math.min((now - state.start) / duration, 1);
+            // rAF timestamps can be slightly earlier than performance.now(): clamp to avoid a negative progress
+            const t = Math.min(Math.max((now - state.start) / duration, 0), 1);
             uniforms.uProgress.value = easeInOutCubic(t);
             render();
             if (t < 1) raf = requestAnimationFrame(tick);
